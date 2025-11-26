@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Avira",
+    "slug": "avira-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "ios": {
+      "bundleIdentifier": "com.langr.avira",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Avira bruger din lokation til at vise ca. hvor du var, da du aktiverede et armbånd.",
+        "NSCameraUsageDescription": "Avira bruger kameraet til at scanne QR-koder på armbåndet.",
+        "NSUserNotificationUsageDescription": "Avira bruger notifikationer til at give dig besked, når nogen scanner dit barns armbånd.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      "expo-camera"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e4f39268-547c-4d35-8d1a-a4b1ccaed23e"
+      }
+    }
+  }
+}
