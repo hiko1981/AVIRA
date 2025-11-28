@@ -1,173 +1,193 @@
 import React, { useCallback, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  Platform,
-} from "react-native";
+import { View, Text, TextInput, StyleSheet, Platform } from "react-native";
 import * as Location from "expo-location";
+import { supabase } from "../lib/supabase";
+import { PrimaryButton } from "./PrimaryButton";
 import colors from "../theme/colors";
-import { supabase } from "../services/api/supabaseClient";
+import { useAppInstallation } from "../context/AppInstallationContext";
 
 type Props = {
-  appId?: string;
-  onClose?: () => void;
+  appId?: string | null;
   onFocus?: () => void;
 };
 
-export function SupportForm({ appId, onClose, onFocus }: Props) {
+const STRINGS = {
+  title: "Support",
+  description: "Skriv til os, hvis du har brug for hjælp til armbånd eller app.",
+  subjectLabel: "Emne (valgfrit)",
+  subjectPlaceholder: "Kort overskrift",
+  messageLabel: "Besked",
+  messagePlaceholder: "Beskriv dit spørgsmål eller din udfordring",
+  send: "Send besked",
+  sent: "Din besked er sendt. Vi vender tilbage hurtigst muligt.",
+  errorGeneric: "Noget gik galt. Prøv igen om lidt.",
+  missingAppId: "Kunne ikke finde app-id. Prøv at genstarte appen.",
+};
+
+export function SupportForm({ appId: propAppId, onFocus }: Props) {
+  const { appId: ctxAppId, deviceInfo } = useAppInstallation();
+  const appId = propAppId ?? ctxAppId ?? null;
+
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
-  const [errorText, setErrorText] = useState("");
-  const [locationError, setLocationError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const canSend = !!appId && message.trim().length > 0 && !submitting;
+  // Kun besked er påkrævet
+  const canSend = !busy && !!appId && message.trim().length > 0;
+
+  const handleSubjectChange = useCallback((value: string) => {
+    setSubject(value);
+    setSent(false);
+    setError(null);
+  }, []);
+
+  const handleMessageChange = useCallback((value: string) => {
+    setMessage(value);
+    setSent(false);
+    setError(null);
+  }, []);
+
+  const handleMessageFocus = useCallback(() => {
+    if (onFocus) onFocus();
+  }, [onFocus]);
 
   const handleSend = useCallback(async () => {
     if (!canSend) return;
+    if (!appId) {
+      setError(STRINGS.missingAppId);
+      return;
+    }
 
-    setSubmitting(true);
-    setStatus("idle");
-    setErrorText("");
-    setLocationError("");
+    setBusy(true);
+    setError(null);
+
+    let coords:
+      | { latitude: number; longitude: number; accuracy?: number | null }
+      | null = null;
 
     try {
-      const { status: permissionStatus } =
-        await Location.requestForegroundPermissionsAsync();
+      const existing = await Location.getForegroundPermissionsAsync();
+      let status = existing.status;
+      if (status !== "granted") {
+        const requested = await Location.requestForegroundPermissionsAsync();
+        status = requested.status;
+      }
+      if (status === "granted") {
+        const pos = await Location.getCurrentPositionAsync({});
+        coords = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy ?? null,
+        };
+      }
+    } catch {
+      coords = null;
+    }
 
-      if (permissionStatus !== "granted") {
-        setLocationError("Lokation er påkrævet for at kunne sende beskeden.");
-        setSubmitting(false);
+    const hasGps = !!coords;
+    const geo = coords
+      ? {
+          lat: coords.latitude,
+          lng: coords.longitude,
+          accuracy: coords.accuracy ?? null,
+        }
+      : {};
+
+    const locale =
+      typeof Intl !== "undefined"
+        ? Intl.DateTimeFormat().resolvedOptions().locale
+        : "unknown";
+
+    const extra = {
+      subject: subject.trim() || null,
+      locale,
+      source: "avira-app-settings",
+      platform: Platform.OS,
+    };
+
+    const payload = {
+      app_id: appId,
+      platform: Platform.OS,
+      subject: subject.trim() || null,
+      message: message.trim(),
+      has_gps: hasGps,
+      lat: coords?.latitude ?? null,
+      lng: coords?.longitude ?? null,
+      accuracy: coords?.accuracy ?? null,
+      device_id: deviceInfo?.deviceId ?? appId,
+      geo,
+      extra,
+    };
+
+    try {
+      const { error: insertError } = await supabase
+        .from("support_messages")
+        .insert([payload]);
+
+      if (insertError) {
+        console.log("support_messages insert error:", insertError);
+        setError(insertError.message || STRINGS.errorGeneric);
+        setBusy(false);
         return;
       }
 
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      const accuracy = pos.coords.accuracy ?? null;
-
-      const payload: any = {
-        app_id: appId,
-        platform: Platform.OS,
-        subject: subject.trim() || null,
-        message: message.trim(),
-        has_gps: true,
-        lat,
-        lng,
-        accuracy,
-        geo: {
-          type: "Point",
-          coordinates: [lng, lat],
-          accuracy,
-        },
-      };
-
-      const { error } = await supabase.from("support_messages").insert([
-        payload,
-      ]);
-
-      if (error) {
-        setStatus("error");
-        setErrorText("Kunne ikke sende beskeden. Prøv igen.");
-      } else {
-        setStatus("success");
-        setSubject("");
-        setMessage("");
-      }
-    } catch (err) {
-      setStatus("error");
-      setErrorText("Kunne ikke sende beskeden. Prøv igen.");
+      setSubject("");
+      setMessage("");
+      setSent(true);
+      setBusy(false);
+    } catch (e: any) {
+      console.log("support_messages insert exception:", e);
+      setError(STRINGS.errorGeneric);
+      setBusy(false);
     }
-
-    setSubmitting(false);
-  }, [appId, subject, message, canSend]);
-
-  const handleClose = useCallback(() => {
-    if (onClose) {
-      onClose();
-    }
-  }, [onClose]);
+  }, [appId, canSend, deviceInfo, message, subject]);
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Support</Text>
-      <Text style={styles.cardDescription}>
-        Skriv til Avira support. Beskeden sendes direkte fra denne installation.
-      </Text>
+      <Text style={styles.title}>{STRINGS.title}</Text>
+      <Text style={styles.description}>{STRINGS.description}</Text>
 
-      {!appId && (
-        <Text style={styles.warningText}>
-          App-id mangler. Gå tilbage og åbn indstillinger via forsiden, så
-          app-id følger med.
-        </Text>
-      )}
+      <View style={styles.fieldGroup}>
+        <Text style={styles.label}>{STRINGS.subjectLabel}</Text>
+        <TextInput
+          value={subject}
+          onChangeText={handleSubjectChange}
+          placeholder={STRINGS.subjectPlaceholder}
+          placeholderTextColor="rgba(248,250,252,0.4)"
+          style={styles.input}
+          returnKeyType="next"
+        />
+      </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Emne (valgfrit)"
-        placeholderTextColor="rgba(255,255,255,0.5)"
-        value={subject}
-        onChangeText={setSubject}
-        autoCapitalize="sentences"
-        editable={!submitting}
-        onFocus={onFocus}
-      />
+      <View style={styles.fieldGroup}>
+        <Text style={styles.label}>{STRINGS.messageLabel}</Text>
+        <TextInput
+          value={message}
+          onChangeText={handleMessageChange}
+          placeholder={STRINGS.messagePlaceholder}
+          placeholderTextColor="rgba(248,250,252,0.4)"
+          style={[styles.input, styles.textArea]}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+          onFocus={handleMessageFocus}
+        />
+      </View>
 
-      <TextInput
-        style={[styles.input, styles.messageInput]}
-        placeholder="Din besked til support (påkrævet)"
-        placeholderTextColor="rgba(255,255,255,0.5)"
-        value={message}
-        onChangeText={setMessage}
-        autoCapitalize="sentences"
-        multiline
-        textAlignVertical="top"
-        editable={!submitting}
-        onFocus={onFocus}
-      />
-
-      {locationError.length > 0 && (
-        <Text style={styles.locationErrorText}>{locationError}</Text>
-      )}
-
-      {status === "success" && (
-        <Text style={styles.successText}>Beskeden er sendt.</Text>
-      )}
-      {status === "error" && (
-        <Text style={styles.errorText}>{errorText}</Text>
-      )}
+      {error && <Text style={styles.error}>{error}</Text>}
+      {sent && !error && <Text style={styles.sent}>{STRINGS.sent}</Text>}
 
       <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={handleClose}
-          disabled={submitting}
-        >
-          <Text style={styles.secondaryButtonLabel}>Luk</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
+        <PrimaryButton
+          label={busy ? "..." : STRINGS.send}
+          onPress={handleSend}
           style={[
             styles.primaryButton,
             !canSend && styles.primaryButtonDisabled,
           ]}
-          onPress={handleSend}
-          disabled={!canSend}
-        >
-          {submitting ? (
-            <ActivityIndicator />
-          ) : (
-            <Text style={styles.primaryButtonLabel}>Send</Text>
-          )}
-        </TouchableOpacity>
+        />
       </View>
     </View>
   );
@@ -176,94 +196,63 @@ export function SupportForm({ appId, onClose, onFocus }: Props) {
 const styles = StyleSheet.create({
   card: {
     marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 20,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.28)",
+    borderColor: "rgba(255,255,255,0.12)",
   },
-  cardTitle: {
+  title: {
     fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 4,
+    fontWeight: "700",
     color: colors.textPrimary,
-    textShadowColor: "rgba(0,0,0,0.8)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    marginBottom: 4,
   },
-  cardDescription: {
+  description: {
     fontSize: 14,
     color: colors.textSecondary,
     marginBottom: 12,
-    textShadowColor: "rgba(0,0,0,0.7)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
-  warningText: {
-    fontSize: 13,
-    color: "#ffdd88",
-    marginBottom: 8,
+  fieldGroup: {
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    marginBottom: 4,
   },
   input: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
+    borderColor: "rgba(255,255,255,0.2)",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 10,
+    fontSize: 15,
     color: colors.textPrimary,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    fontSize: 14,
+    backgroundColor: "rgba(15,23,42,0.8)",
   },
-  messageInput: {
-    minHeight: 100,
+  textArea: {
+    minHeight: 96,
   },
-  locationErrorText: {
-    fontSize: 12,
-    color: "#ff9a9a",
+  error: {
+    color: "#F97373",
+    fontSize: 13,
     marginBottom: 8,
   },
-  successText: {
+  sent: {
+    color: "#4ADE80",
     fontSize: 13,
-    color: "#7dff9a",
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 13,
-    color: "#ff9a9a",
     marginBottom: 8,
   },
   buttonRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
     marginTop: 4,
-  },
-  secondaryButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.35)",
-    marginRight: 8,
-  },
-  secondaryButtonLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    marginBottom: 4,
   },
   primaryButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: colors.accentPrimary ?? "#ffffff",
+    width: "100%",
   },
   primaryButtonDisabled: {
-    opacity: 0.35,
-  },
-  primaryButtonLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#000000",
+    opacity: 0.5,
   },
 });
-

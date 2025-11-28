@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
-  Platform,
+  Platform
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
@@ -13,6 +13,7 @@ import * as Notifications from "expo-notifications";
 import { Camera } from "expo-camera";
 import * as Device from "expo-device";
 import * as Application from "expo-application";
+import { useTranslation } from "react-i18next";
 import { RootStackParamList } from "../navigation-types";
 import { useAppInstallation } from "../context/AppInstallationContext";
 import { supabase } from "../lib/supabase";
@@ -24,6 +25,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Consent">;
 type PermissionState = "unknown" | "granted" | "denied";
 
 export function ConsentScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const { appId, deviceInfo, ready } = useAppInstallation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export function ConsentScreen({ navigation }: Props) {
         coords = {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy ?? undefined,
+          accuracy: pos.coords.accuracy ?? undefined
         };
       }
     } catch {
@@ -91,12 +93,12 @@ export function ConsentScreen({ navigation }: Props) {
       Device.osVersion ?? "",
       Application.applicationId ?? "",
       Platform.OS,
-      Date.now(),
+      Date.now()
     ].join("|");
 
     const attested = {
       is_emulator: deviceInfo.isEmulator,
-      permissions: { location: locationStatus, camera: cameraStatus, push: pushStatus },
+      permissions: { location: locationStatus, camera: cameraStatus, push: pushStatus }
     };
 
     try {
@@ -111,7 +113,7 @@ export function ConsentScreen({ navigation }: Props) {
         p_build_number: deviceInfo.buildNumber,
         p_attested: attested,
         p_fp_raw: fpRaw,
-        p_vendor: "apple",
+        p_vendor: "apple"
       });
 
       console.log("register_device_v7 response:", data, regError);
@@ -127,7 +129,7 @@ export function ConsentScreen({ navigation }: Props) {
           p_app_id: appId,
           p_lat: coords.latitude,
           p_lng: coords.longitude,
-          p_accuracy: coords.accuracy ?? 0,
+          p_accuracy: coords.accuracy ?? 0
         });
       }
 
@@ -135,35 +137,26 @@ export function ConsentScreen({ navigation }: Props) {
       navigation.replace("Dashboard", { appId });
     } catch (e: any) {
       setBusy(false);
-      setError(e?.message ?? "Ukendt fejl");
+      setError(e?.message ?? t("consent.unknownError"));
     }
   }
 
   return (
     <AviraBackground overlayOpacity={0.25}>
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Tilladelser</Text>
+        <Text style={styles.title}>{t("consent.title")}</Text>
 
-        <Text style={styles.subtitle}>
-          For at Avira virker korrekt, skal du give adgang til lokation, kamera og
-          notifikationer. Vi bruger kun data når du aktiverer et armbånd eller når det scannes.
-        </Text>
+        <Text style={styles.subtitle}>{t("consent.subtitle")}</Text>
 
         <View style={styles.card}>
-          <Text style={styles.itemTitle}>Lokation</Text>
-          <Text style={styles.itemBody}>
-            Bruges kun til at vise ca. hvor du stod, da du aktiverede armbåndet.
-          </Text>
+          <Text style={styles.itemTitle}>{t("consent.locationTitle")}</Text>
+          <Text style={styles.itemBody}>{t("consent.locationBody")}</Text>
 
-          <Text style={styles.itemTitle}>Kamera</Text>
-          <Text style={styles.itemBody}>
-            Bruges til at scanne QR-koden på armbåndet.
-          </Text>
+          <Text style={styles.itemTitle}>{t("consent.cameraTitle")}</Text>
+          <Text style={styles.itemBody}>{t("consent.cameraBody")}</Text>
 
-          <Text style={styles.itemTitle}>Push-beskeder</Text>
-          <Text style={styles.itemBody}>
-            Bruges når nogen scanner dit barns armbånd.
-          </Text>
+          <Text style={styles.itemTitle}>{t("consent.pushTitle")}</Text>
+          <Text style={styles.itemBody}>{t("consent.pushBody")}</Text>
         </View>
 
         {error && (
@@ -174,7 +167,7 @@ export function ConsentScreen({ navigation }: Props) {
 
         <View style={styles.footer}>
           {busy && <ActivityIndicator style={styles.spinner} />}
-          <PrimaryButton label="Accepter og fortsæt" onPress={handleContinue} />
+          <PrimaryButton label={t("consent.cta")} onPress={handleContinue} />
         </View>
       </ScrollView>
     </AviraBackground>
@@ -185,53 +178,53 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
     paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: 40
   },
   title: {
     fontSize: 32,
     fontWeight: "800",
     color: colors.textPrimary,
     textAlign: "center",
-    marginBottom: 10,
+    marginBottom: 10
   },
   subtitle: {
     fontSize: 16,
     lineHeight: 24,
     color: colors.textSecondary,
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 30
   },
   card: {
     borderRadius: 16,
     padding: 20,
     backgroundColor: "rgba(15,23,42,0.65)",
-    marginBottom: 30,
+    marginBottom: 30
   },
   itemTitle: {
     fontSize: 17,
     fontWeight: "700",
     color: colors.textPrimary,
-    marginTop: 15,
+    marginTop: 15
   },
   itemBody: {
     fontSize: 15,
     color: colors.textSecondary,
-    marginTop: 6,
+    marginTop: 6
   },
   footer: {
-    marginTop: 20,
+    marginTop: 20
   },
   spinner: {
-    marginBottom: 16,
+    marginBottom: 16
   },
   errorBox: {
     backgroundColor: "rgba(239,68,68,0.25)",
     padding: 14,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 16
   },
   errorText: {
     color: "#fecaca",
-    textAlign: "center",
-  },
+    textAlign: "center"
+  }
 });

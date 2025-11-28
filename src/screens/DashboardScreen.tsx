@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,20 +13,100 @@ import { AviraBackground } from "../components/AviraBackground";
 import { PrimaryButton } from "../components/PrimaryButton";
 import WristbandCard from "../components/WristbandCard";
 import colors from "../theme/colors";
-import { useWristbands } from "../hooks/useWristbands";
+import { useAppInstallation } from "../context/AppInstallationContext";
+import { supabase } from "../lib/supabase";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Dashboard">;
 
-export function DashboardScreen({ navigation, route }: Props) {
-  const appId = route.params?.appId ?? null;
+type WristbandRow = {
+  id: string;
+  child_name: string | null;
+  expires_at: string | null;
+  updated_at: string | null;
+  last_scan_at?: string | null;
+  push_enabled: boolean | null;
+  status: string | null;
+  owner_app_id: string | null;
+};
 
-  const { wristbands, isLoading, isRefreshing, error, refresh } = useWristbands(appId);
+type Wristband = {
+  id: string;
+  childName: string | null;
+  expiresAt: string | null;
+  lastScanAt: string | null;
+  pushEnabled: boolean;
+};
+
+export function DashboardScreen({ navigation, route }: Props) {
+  const { appId: appIdFromContext } = useAppInstallation();
+  const appId = route.params?.appId ?? appIdFromContext ?? null;
+
+  const [wristbands, setWristbands] = useState<Wristband[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadWristbands = useCallback(
+    async (opts?: { refresh?: boolean }) => {
+      if (!appId) {
+        setWristbands([]);
+        setIsLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
+
+      if (opts?.refresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+
+      try {
+        const { data, error: dbError } = await supabase
+          .from("wristbands")
+          .select(
+            "id, child_name, expires_at, updated_at, last_scan_at, push_enabled, status, owner_app_id"
+          )
+          .eq("owner_app_id", appId)
+          .eq("status", "aktiv")
+          .order("updated_at", { ascending: false });
+
+        if (dbError) {
+          console.log("Dashboard loadWristbands error", dbError);
+          setError(dbError.message ?? "Ukendt fejl");
+          setWristbands([]);
+        } else if (data) {
+          const mapped: Wristband[] = (data as WristbandRow[]).map((row) => ({
+            id: row.id,
+            childName: row.child_name ?? null,
+            expiresAt: row.expires_at ?? null,
+            lastScanAt: row.last_scan_at ?? row.updated_at ?? null,
+            pushEnabled: row.push_enabled ?? true,
+          }));
+          setWristbands(mapped);
+          setError(null);
+        }
+      } catch (e: any) {
+        console.log("Dashboard loadWristbands exception", e);
+        setError(e?.message ?? "Ukendt fejl");
+        setWristbands([]);
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [appId]
+  );
+
+  useEffect(() => {
+    loadWristbands();
+  }, [loadWristbands]);
 
   const latestScannedId = useMemo(() => {
     let latestId: string | null = null;
     let latestTs = -Infinity;
     for (const wb of wristbands) {
-      const src = wb.lastScanAt || wb.activatedAt;
+      const src = wb.lastScanAt || wb.expiresAt;
       if (!src) continue;
       const t = new Date(src).getTime();
       if (!isFinite(t)) continue;
@@ -65,7 +145,10 @@ export function DashboardScreen({ navigation, route }: Props) {
         <View style={styles.topSection}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>Dine armbånd</Text>
-            <TouchableOpacity onPress={handleSettingsPress} style={styles.settingsButton}>
+            <TouchableOpacity
+              onPress={handleSettingsPress}
+              style={styles.settingsButton}
+            >
               <Text style={styles.settingsLabel}>Indstillinger</Text>
             </TouchableOpacity>
           </View>
@@ -74,11 +157,17 @@ export function DashboardScreen({ navigation, route }: Props) {
             {isLoading && !hasWristbands ? (
               <Text style={styles.statusText}>Henter armbånd...</Text>
             ) : hasWristbands ? (
-              <Text style={styles.statusText}>Aktive armbånd: {wristbands.length}</Text>
+              <Text style={styles.statusText}>
+                Aktive armbånd: {wristbands.length}
+              </Text>
             ) : (
-              <Text style={styles.statusText}>Du har ingen armbånd endnu.</Text>
+              <Text style={styles.statusText}>
+                Du har ingen armbånd endnu.
+              </Text>
             )}
-            {error && <Text style={styles.errorText}>Fejl: {error.message}</Text>}
+            {error && (
+              <Text style={styles.errorText}>Fejl: {error}</Text>
+            )}
           </View>
         </View>
 
@@ -91,7 +180,7 @@ export function DashboardScreen({ navigation, route }: Props) {
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
-                onRefresh={refresh}
+                onRefresh={() => loadWristbands({ refresh: true })}
                 tintColor={colors.primary}
               />
             }
@@ -104,10 +193,14 @@ export function DashboardScreen({ navigation, route }: Props) {
                     id={wristband.id}
                     name={wristband.childName || "Navn ikke angivet"}
                     expiresAt={wristband.expiresAt}
-                    lastSeenAt={wristband.lastScanAt || wristband.activatedAt}
+                    lastSeenAt={wristband.lastScanAt}
                     pushEnabled={wristband.pushEnabled}
-                    onTogglePush={(next) => handleTogglePush(wristband.id, next)}
-                    onOpenLocation={() => handleOpenLocation(wristband.id)}
+                    onTogglePush={(next) =>
+                      handleTogglePush(wristband.id, next)
+                    }
+                    onOpenLocation={() =>
+                      handleOpenLocation(wristband.id)
+                    }
                     index={index}
                     isPinned={wristband.id === latestScannedId}
                   />
@@ -116,7 +209,9 @@ export function DashboardScreen({ navigation, route }: Props) {
             ) : (
               !isLoading && (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>Ingen aktive armbånd endnu</Text>
+                  <Text style={styles.emptyTitle}>
+                    Ingen aktive armbånd endnu
+                  </Text>
                   <Text style={styles.emptyBody}>
                     Tryk på knappen herunder for at tilføje dit første armbånd.
                   </Text>

@@ -10,29 +10,30 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ImageBackground,
-  Linking,
+  Linking
 } from "react-native";
 import {
   CameraView,
-  useCameraPermissions,
+  useCameraPermissions
 } from "expo-camera";
 import type { BarcodeScanningResult } from "expo-camera";
 import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { WebView } from "react-native-webview";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../lib/supabase";
 import { AviraBackground } from "../components/AviraBackground";
 import { useAppInstallation } from "../context/AppInstallationContext";
 
 type Status = "idle" | "scanning" | "checking" | "activating";
-
 type WristbandStatus = "ledig" | "aktiv" | "brugt" | null;
 
 const SHOP_URL = "https://qrlabel.one";
 
 export default function ScanScreen() {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const { appId, ready, deviceInfo } = useAppInstallation();
   const [permission, requestPermission] = useCameraPermissions();
   const [status, setStatus] = useState<Status>("idle");
@@ -64,7 +65,7 @@ export default function ScanScreen() {
 
   useEffect(() => {
     if (!permission) requestPermission();
-  }, [permission]);
+  }, [permission, requestPermission]);
 
   const resetState = useCallback(() => {
     setStatus("scanning");
@@ -96,8 +97,9 @@ export default function ScanScreen() {
 
   const checkWristbandStatus = async (tokenText: string) => {
     if (!appId) {
-      setErrorText("Appen er ikke klar endnu.");
+      setErrorText(t("scan.errorAppNotReady"));
       setStatus("idle");
+      setTimeout(() => resetState(), 1800);
       return;
     }
 
@@ -106,13 +108,16 @@ export default function ScanScreen() {
 
     try {
       const { data, error } = await supabase.functions.invoke("wristband_status", {
-        body: { token: tokenText, app_id: appId },
+        body: { token: tokenText, app_id: appId }
       });
 
       if (error || !data?.ok) {
         const msg = (data?.error as string) ?? "ukendt fejl";
-        setErrorText(`Kunne ikke slå armbånd op: ${msg}`);
+        setErrorText(
+          t("scan.errorLookupFailedWithMessage", { message: String(msg) })
+        );
         setStatus("idle");
+        setTimeout(() => resetState(), 1800);
         return;
       }
 
@@ -140,8 +145,9 @@ export default function ScanScreen() {
       setShowForm(true);
       setStatus("idle");
     } catch {
-      setErrorText("Kunne ikke slå armbånd op.");
+      setErrorText(t("scan.errorLookupFailed"));
       setStatus("idle");
+      setTimeout(() => resetState(), 1800);
     }
   };
 
@@ -152,8 +158,9 @@ export default function ScanScreen() {
 
     const { token, url } = parseQr(data);
     if (!token || !url) {
-      setErrorText("Ukendt QR-kode");
+      setErrorText(t("scan.errorUnknownQr"));
       setStatus("idle");
+      setTimeout(() => resetState(), 1800);
       return;
     }
 
@@ -164,12 +171,12 @@ export default function ScanScreen() {
 
   const handleActivate = async () => {
     if (!ready || !appId) {
-      setErrorText("Appen er ikke klar endnu.");
+      setErrorText(t("scan.errorAppNotReady"));
       return;
     }
 
     if (!scannedToken) {
-      setErrorText("Ingen token.");
+      setErrorText(t("scan.errorNoToken"));
       return;
     }
 
@@ -210,27 +217,30 @@ export default function ScanScreen() {
         timezone: deviceInfo?.timezone ?? "Europe/Copenhagen",
         lat,
         lng,
-        accuracy,
+        accuracy
       };
 
       const { data, error } = await supabase.functions.invoke(
         "wristband_activate",
-        { body: payload },
+        { body: payload }
       );
 
       if (error || !data?.ok) {
-        const msg = (data?.error as string) ?? (data?.code as string) ?? "ukendt fejl";
-        setErrorText(`Aktivering mislykkedes: ${msg}`);
+        const msg =
+          (data?.error as string) ?? (data?.code as string) ?? "ukendt fejl";
+        setErrorText(
+          t("scan.errorActivateFailedWithMessage", { message: String(msg) })
+        );
         setStatus("idle");
         return;
       }
 
       setShowForm(false);
-      setInfoText("Armbåndet er aktiveret!");
+      setInfoText(t("scan.infoActivated"));
       setStatus("idle");
       navigation.goBack();
     } catch {
-      setErrorText("Aktivering mislykkedes.");
+      setErrorText(t("scan.errorActivateFailed"));
       setStatus("idle");
     }
   };
@@ -271,7 +281,7 @@ export default function ScanScreen() {
           style={{
             flexDirection: "row",
             alignItems: "center",
-            marginBottom: 16,
+            marginBottom: 16
           }}
         >
           <Pressable
@@ -280,7 +290,7 @@ export default function ScanScreen() {
               paddingVertical: 6,
               paddingRight: 16,
               paddingLeft: 2,
-              marginRight: 4,
+              marginRight: 4
             }}
           >
             <Text
@@ -289,10 +299,10 @@ export default function ScanScreen() {
                 fontSize: 18,
                 textShadowColor: "rgba(15,23,42,0.95)",
                 textShadowOffset: { width: 0, height: 2 },
-                textShadowRadius: 8,
+                textShadowRadius: 8
               }}
             >
-              ‹ Tilbage
+              {t("scan.back")}
             </Text>
           </Pressable>
         </View>
@@ -305,10 +315,10 @@ export default function ScanScreen() {
             marginBottom: 8,
             textShadowColor: "rgba(15,23,42,0.95)",
             textShadowOffset: { width: 0, height: 3 },
-            textShadowRadius: 10,
+            textShadowRadius: 10
           }}
         >
-          Scan armbånd
+          {t("scan.title")}
         </Text>
 
         <Text
@@ -318,10 +328,10 @@ export default function ScanScreen() {
             marginBottom: 20,
             textShadowColor: "rgba(15,23,42,0.85)",
             textShadowOffset: { width: 0, height: 2 },
-            textShadowRadius: 8,
+            textShadowRadius: 8
           }}
         >
-          Hold QR-koden fra armbåndet inden for rammen.
+          {t("scan.subtitle")}
         </Text>
 
         <View
@@ -330,7 +340,7 @@ export default function ScanScreen() {
             aspectRatio: 1,
             borderRadius: 24,
             overflow: "hidden",
-            backgroundColor: "rgba(0,0,0,0.25)",
+            backgroundColor: "rgba(0,0,0,0.25)"
           }}
         >
           {hasCamPermission ? (
@@ -350,7 +360,7 @@ export default function ScanScreen() {
                 flex: 1,
                 alignItems: "center",
                 justifyContent: "center",
-                padding: 24,
+                padding: 24
               }}
             >
               <Text
@@ -358,10 +368,10 @@ export default function ScanScreen() {
                   color: "white",
                   textShadowColor: "rgba(0,0,0,0.8)",
                   textShadowOffset: { width: 0, height: 2 },
-                  textShadowRadius: 8,
+                  textShadowRadius: 8
                 }}
               >
-                Du skal give kameraadgang.
+                {t("scan.cameraPermissionNeeded")}
               </Text>
               <Pressable
                 onPress={requestPermission}
@@ -369,10 +379,12 @@ export default function ScanScreen() {
                   marginTop: 16,
                   padding: 12,
                   backgroundColor: "white",
-                  borderRadius: 999,
+                  borderRadius: 999
                 }}
               >
-                <Text style={{ fontWeight: "600" }}>Giv adgang</Text>
+                <Text style={{ fontWeight: "600" }}>
+                  {t("scan.cameraPermissionButton")}
+                </Text>
               </Pressable>
             </View>
           )}
@@ -387,11 +399,11 @@ export default function ScanScreen() {
                 paddingVertical: 8,
                 paddingHorizontal: 16,
                 borderRadius: 999,
-                backgroundColor: "rgba(15,23,42,0.9)",
+                backgroundColor: "rgba(15,23,42,0.9)"
               }}
             >
               <Text style={{ color: "white", fontWeight: "600" }}>
-                {torchOn ? "Sluk lygte" : "Tænd lygte"}
+                {torchOn ? t("scan.flashOff") : t("scan.flashOn")}
               </Text>
             </Pressable>
           )}
@@ -407,7 +419,7 @@ export default function ScanScreen() {
               color: "white",
               textShadowColor: "rgba(15,23,42,0.9)",
               textShadowOffset: { width: 0, height: 2 },
-              textShadowRadius: 6,
+              textShadowRadius: 6
             }}
           >
             {errorText}
@@ -424,25 +436,12 @@ export default function ScanScreen() {
               color: "white",
               textShadowColor: "rgba(15,23,42,0.9)",
               textShadowOffset: { width: 0, height: 2 },
-              textShadowRadius: 6,
+              textShadowRadius: 6
             }}
           >
             {infoText}
           </Text>
         )}
-
-        <Pressable
-          onPress={resetState}
-          style={{
-            marginTop: 16,
-            paddingVertical: 14,
-            backgroundColor: "white",
-            borderRadius: 999,
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ color: "#020617", fontWeight: "700" }}>Scan igen</Text>
-        </Pressable>
       </View>
 
       <Modal visible={showForm} transparent animationType="slide">
@@ -456,7 +455,7 @@ export default function ScanScreen() {
               style={{
                 flex: 1,
                 justifyContent: "flex-end",
-                backgroundColor: "rgba(0,0,0,0.3)",
+                backgroundColor: "rgba(0,0,0,0.3)"
               }}
             >
               <View
@@ -464,7 +463,7 @@ export default function ScanScreen() {
                   marginHorizontal: 16,
                   marginBottom: 12,
                   borderRadius: 32,
-                  overflow: "hidden",
+                  overflow: "hidden"
                 }}
               >
                 <ImageBackground
@@ -477,7 +476,7 @@ export default function ScanScreen() {
                       paddingHorizontal: 20,
                       paddingTop: 20,
                       paddingBottom: 40,
-                      borderRadius: 32,
+                      borderRadius: 32
                     }}
                   >
                     <Text
@@ -488,10 +487,10 @@ export default function ScanScreen() {
                         marginBottom: 4,
                         textShadowColor: "rgba(15,23,42,0.95)",
                         textShadowOffset: { width: 0, height: 3 },
-                        textShadowRadius: 10,
+                        textShadowRadius: 10
                       }}
                     >
-                      Aktiver armbånd
+                      {t("scan.activateTitle")}
                     </Text>
 
                     <Text
@@ -501,14 +500,14 @@ export default function ScanScreen() {
                         marginBottom: 20,
                         textShadowColor: "rgba(15,23,42,0.9)",
                         textShadowOffset: { width: 0, height: 2 },
-                        textShadowRadius: 8,
+                        textShadowRadius: 8
                       }}
                     >
-                      Token: {scannedToken}
+                      {t("scan.activateTokenLabel")} {scannedToken}
                     </Text>
 
                     <TextInput
-                      placeholder="Barnets navn"
+                      placeholder={t("scan.childNamePlaceholder")}
                       placeholderTextColor="rgba(255,255,255,0.78)"
                       value={childName}
                       onChangeText={setChildName}
@@ -518,12 +517,12 @@ export default function ScanScreen() {
                         paddingHorizontal: 16,
                         paddingVertical: 10,
                         marginBottom: 12,
-                        color: "white",
+                        color: "white"
                       }}
                     />
 
                     <TextInput
-                      placeholder="Forælders navn"
+                      placeholder={t("scan.parentNamePlaceholder")}
                       placeholderTextColor="rgba(255,255,255,0.78)"
                       value={parentName}
                       onChangeText={setParentName}
@@ -533,12 +532,12 @@ export default function ScanScreen() {
                         paddingHorizontal: 16,
                         paddingVertical: 10,
                         marginBottom: 12,
-                        color: "white",
+                        color: "white"
                       }}
                     />
 
                     <TextInput
-                      placeholder="Telefonnummer"
+                      placeholder={t("scan.phonePlaceholder")}
                       placeholderTextColor="rgba(255,255,255,0.78)"
                       value={phone}
                       onChangeText={setPhone}
@@ -549,7 +548,7 @@ export default function ScanScreen() {
                         paddingHorizontal: 16,
                         paddingVertical: 10,
                         marginBottom: 24,
-                        color: "white",
+                        color: "white"
                       }}
                     />
 
@@ -560,7 +559,7 @@ export default function ScanScreen() {
                         borderRadius: 999,
                         overflow: "hidden",
                         opacity: activateDisabled ? 0.5 : 1,
-                        marginBottom: 18,
+                        marginBottom: 18
                       }}
                     >
                       <LinearGradient
@@ -570,7 +569,7 @@ export default function ScanScreen() {
                         style={{
                           paddingVertical: 14,
                           alignItems: "center",
-                          justifyContent: "center",
+                          justifyContent: "center"
                         }}
                       >
                         <Text
@@ -579,10 +578,10 @@ export default function ScanScreen() {
                             fontWeight: "700",
                             textShadowColor: "rgba(15,23,42,0.9)",
                             textShadowOffset: { width: 0, height: 2 },
-                            textShadowRadius: 8,
+                            textShadowRadius: 8
                           }}
                         >
-                          Aktivér armbånd
+                          {t("scan.activateCta")}
                         </Text>
                       </LinearGradient>
                     </Pressable>
@@ -594,7 +593,7 @@ export default function ScanScreen() {
                         borderRadius: 999,
                         borderWidth: 1,
                         borderColor: "rgba(255,255,255,0.4)",
-                        alignItems: "center",
+                        alignItems: "center"
                       }}
                     >
                       <Text
@@ -603,10 +602,10 @@ export default function ScanScreen() {
                           fontWeight: "500",
                           textShadowColor: "rgba(15,23,42,0.8)",
                           textShadowOffset: { width: 0, height: 2 },
-                          textShadowRadius: 6,
+                          textShadowRadius: 6
                         }}
                       >
-                        Annuller
+                        {t("scan.cancel")}
                       </Text>
                     </Pressable>
                   </View>
@@ -623,14 +622,14 @@ export default function ScanScreen() {
             flex: 1,
             justifyContent: "center",
             alignItems: "center",
-            backgroundColor: "rgba(0,0,0,0.45)",
+            backgroundColor: "rgba(0,0,0,0.45)"
           }}
         >
           <View
             style={{
               width: "86%",
               borderRadius: 28,
-              overflow: "hidden",
+              overflow: "hidden"
             }}
           >
             <ImageBackground
@@ -642,7 +641,7 @@ export default function ScanScreen() {
                   backgroundColor: "rgba(15,23,42,0.55)",
                   paddingHorizontal: 20,
                   paddingVertical: 24,
-                  borderRadius: 28,
+                  borderRadius: 28
                 }}
               >
                 <Text
@@ -653,19 +652,19 @@ export default function ScanScreen() {
                     marginBottom: 8,
                     textShadowColor: "rgba(0,0,0,0.9)",
                     textShadowOffset: { width: 0, height: 3 },
-                    textShadowRadius: 10,
+                    textShadowRadius: 10
                   }}
                 >
-                  Armbåndet er allerede aktivt
+                  {t("scan.modalActiveTitle")}
                 </Text>
                 <Text
                   style={{
                     fontSize: 14,
                     color: "rgba(255,255,255,0.92)",
-                    marginBottom: 20,
+                    marginBottom: 20
                   }}
                 >
-                  Du kan se onlinevisningen, som andre ser den, når de scanner QR-koden.
+                  {t("scan.modalActiveBody")}
                 </Text>
 
                 <Pressable
@@ -673,7 +672,7 @@ export default function ScanScreen() {
                   style={{
                     borderRadius: 999,
                     overflow: "hidden",
-                    marginBottom: 12,
+                    marginBottom: 12
                   }}
                 >
                   <LinearGradient
@@ -683,16 +682,16 @@ export default function ScanScreen() {
                     style={{
                       paddingVertical: 13,
                       alignItems: "center",
-                      justifyContent: "center",
+                      justifyContent: "center"
                     }}
                   >
                     <Text
                       style={{
                         color: "white",
-                        fontWeight: "700",
+                        fontWeight: "700"
                       }}
                     >
-                      Se onlinevisning
+                      {t("scan.modalActiveOpenOnline")}
                     </Text>
                   </LinearGradient>
                 </Pressable>
@@ -707,16 +706,16 @@ export default function ScanScreen() {
                     borderRadius: 999,
                     borderWidth: 1,
                     borderColor: "rgba(255,255,255,0.5)",
-                    alignItems: "center",
+                    alignItems: "center"
                   }}
                 >
                   <Text
                     style={{
                       color: "white",
-                      fontWeight: "500",
+                      fontWeight: "500"
                     }}
                   >
-                    Luk
+                    {t("scan.modalClose")}
                   </Text>
                 </Pressable>
               </View>
@@ -731,14 +730,14 @@ export default function ScanScreen() {
             flex: 1,
             justifyContent: "center",
             alignItems: "center",
-            backgroundColor: "rgba(0,0,0,0.45)",
+            backgroundColor: "rgba(0,0,0,0.45)"
           }}
         >
           <View
             style={{
               width: "86%",
               borderRadius: 28,
-              overflow: "hidden",
+              overflow: "hidden"
             }}
           >
             <ImageBackground
@@ -750,7 +749,7 @@ export default function ScanScreen() {
                   backgroundColor: "rgba(15,23,42,0.55)",
                   paddingHorizontal: 20,
                   paddingVertical: 24,
-                  borderRadius: 28,
+                  borderRadius: 28
                 }}
               >
                 <Text
@@ -761,19 +760,19 @@ export default function ScanScreen() {
                     marginBottom: 8,
                     textShadowColor: "rgba(0,0,0,0.9)",
                     textShadowOffset: { width: 0, height: 3 },
-                    textShadowRadius: 10,
+                    textShadowRadius: 10
                   }}
                 >
-                  Armbåndet er udløbet
+                  {t("scan.modalExpiredTitle")}
                 </Text>
                 <Text
                   style={{
                     fontSize: 14,
                     color: "rgba(255,255,255,0.92)",
-                    marginBottom: 20,
+                    marginBottom: 20
                   }}
                 >
-                  Du kan købe et nyt armbånd i webshoppen.
+                  {t("scan.modalExpiredBody")}
                 </Text>
 
                 <Pressable
@@ -781,7 +780,7 @@ export default function ScanScreen() {
                   style={{
                     borderRadius: 999,
                     overflow: "hidden",
-                    marginBottom: 12,
+                    marginBottom: 12
                   }}
                 >
                   <LinearGradient
@@ -791,16 +790,16 @@ export default function ScanScreen() {
                     style={{
                       paddingVertical: 13,
                       alignItems: "center",
-                      justifyContent: "center",
+                      justifyContent: "center"
                     }}
                   >
                     <Text
                       style={{
                         color: "white",
-                        fontWeight: "700",
+                        fontWeight: "700"
                       }}
                     >
-                      Køb nyt armbånd
+                      {t("scan.modalExpiredCta")}
                     </Text>
                   </LinearGradient>
                 </Pressable>
@@ -815,16 +814,16 @@ export default function ScanScreen() {
                     borderRadius: 999,
                     borderWidth: 1,
                     borderColor: "rgba(255,255,255,0.5)",
-                    alignItems: "center",
+                    alignItems: "center"
                   }}
                 >
                   <Text
                     style={{
                       color: "white",
-                      fontWeight: "500",
+                      fontWeight: "500"
                     }}
                   >
-                    Luk
+                    {t("scan.modalClose")}
                   </Text>
                 </Pressable>
               </View>
@@ -839,14 +838,14 @@ export default function ScanScreen() {
             style={{
               flex: 1,
               paddingTop: 32,
-              paddingHorizontal: 16,
+              paddingHorizontal: 16
             }}
           >
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                marginBottom: 12,
+                marginBottom: 12
               }}
             >
               <Pressable
@@ -855,7 +854,7 @@ export default function ScanScreen() {
                   paddingVertical: 6,
                   paddingRight: 16,
                   paddingLeft: 2,
-                  marginRight: 4,
+                  marginRight: 4
                 }}
               >
                 <Text
@@ -864,10 +863,10 @@ export default function ScanScreen() {
                     fontSize: 18,
                     textShadowColor: "rgba(15,23,42,0.95)",
                     textShadowOffset: { width: 0, height: 2 },
-                    textShadowRadius: 8,
+                    textShadowRadius: 8
                   }}
                 >
-                  ‹ Luk
+                  {t("scan.modalClose")}
                 </Text>
               </Pressable>
               <Text
@@ -877,10 +876,10 @@ export default function ScanScreen() {
                   fontWeight: "700",
                   textShadowColor: "rgba(15,23,42,0.95)",
                   textShadowOffset: { width: 0, height: 2 },
-                  textShadowRadius: 8,
+                  textShadowRadius: 8
                 }}
               >
-                Onlinevisning
+                {t("scan.onlineViewTitle")}
               </Text>
             </View>
 
@@ -889,7 +888,7 @@ export default function ScanScreen() {
                 flex: 1,
                 borderRadius: 24,
                 overflow: "hidden",
-                backgroundColor: "white",
+                backgroundColor: "white"
               }}
             >
               <WebView

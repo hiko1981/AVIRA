@@ -6,11 +6,12 @@ import {
   Image,
   ImageBackground,
   StatusBar,
-  Platform,
+  Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
+import { useTranslation } from "react-i18next";
 import { RootStackParamList } from "../navigation-types";
 import colors from "../theme/colors";
 import { PrimaryButton } from "../components/PrimaryButton";
@@ -18,6 +19,8 @@ import { PrimaryButton } from "../components/PrimaryButton";
 type Props = NativeStackScreenProps<RootStackParamList, "Welcome">;
 
 export function WelcomeScreen({ navigation }: Props) {
+  const { t } = useTranslation();
+
   function handleGetStarted() {
     navigation.navigate("Consent");
   }
@@ -40,17 +43,12 @@ export function WelcomeScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.container}>
-            <Text style={styles.appName}>AVIRA</Text>
-            <Text style={styles.tagline}>Wristband safety for families</Text>
+            <Text style={styles.appName}>{t("welcome.appName")}</Text>
+            <Text style={styles.tagline}>{t("welcome.tagline")}</Text>
 
-            <Text style={styles.heroTitle}>
-              Hold styr på dit barn i{"\n"}menneskemængder
-            </Text>
+            <Text style={styles.heroTitle}>{t("welcome.heroTitle")}</Text>
 
-            <Text style={styles.heroSubtitle}>
-              Scan armbåndet, aktivér det i appen, og få besked når nogen
-              scanner koden. Uden tracking, kun når det gælder.
-            </Text>
+            <Text style={styles.heroSubtitle}>{t("welcome.heroSubtitle")}</Text>
 
             <View style={styles.chips}>
               <LinearGradient
@@ -59,7 +57,7 @@ export function WelcomeScreen({ navigation }: Props) {
                 end={{ x: 1, y: 0.5 }}
                 style={styles.chip}
               >
-                <Text style={styles.chipText}>24-timers QR-token</Text>
+                <Text style={styles.chipText}>{t("welcome.chip1")}</Text>
               </LinearGradient>
 
               <LinearGradient
@@ -68,7 +66,7 @@ export function WelcomeScreen({ navigation }: Props) {
                 end={{ x: 1, y: 0.5 }}
                 style={styles.chip}
               >
-                <Text style={styles.chipText}>Push-besked ved scan</Text>
+                <Text style={styles.chipText}>{t("welcome.chip2")}</Text>
               </LinearGradient>
 
               <LinearGradient
@@ -77,12 +75,12 @@ export function WelcomeScreen({ navigation }: Props) {
                 end={{ x: 1, y: 0.5 }}
                 style={styles.chip}
               >
-                <Text style={styles.chipText}>Designet til forældre</Text>
+                <Text style={styles.chipText}>{t("welcome.chip3")}</Text>
               </LinearGradient>
             </View>
 
             <PrimaryButton
-              label="Kom i gang"
+              label={t("welcome.getStarted")}
               onPress={handleGetStarted}
               style={{ width: "100%", marginTop: 50 }}
             />
@@ -99,13 +97,13 @@ const styles = StyleSheet.create({
   backgroundImage: { resizeMode: "cover" },
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(2,6,23,0.05)",
+    backgroundColor: "rgba(2,6,23,0.05)"
   },
   container: {
     flex: 1,
     paddingHorizontal: 22,
     paddingTop: Platform.select({ ios: 60, android: 40 }) as number,
-    alignItems: "center",
+    alignItems: "center"
   },
   appName: {
     fontSize: 34,
@@ -114,7 +112,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     textShadowColor: "rgba(0,0,0,0.9)",
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 12,
+    textShadowRadius: 12
   },
   tagline: {
     marginTop: 6,
@@ -122,7 +120,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textShadowColor: "rgba(0,0,0,0.9)",
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 12,
+    textShadowRadius: 12
   },
   heroTitle: {
     marginTop: 40,
@@ -133,7 +131,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     textShadowColor: "rgba(15,23,42,0.95)",
     textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 10,
+    textShadowRadius: 10
   },
   heroSubtitle: {
     marginTop: 22,
@@ -144,34 +142,34 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(15,23,42,0.85)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 20
   },
   chips: {
     marginTop: 40,
     gap: 16,
-    alignItems: "center",
+    alignItems: "center"
   },
   chip: {
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
+    borderColor: "rgba(255,255,255,0.25)"
   },
   chipText: {
     fontSize: 15,
     fontWeight: "600",
-    color: colors.textPrimary,
+    color: colors.textPrimary
   },
   watermarkContainer: {
     position: "absolute",
     top: "18%",
     left: "50%",
-    transform: [{ translateX: -290 }],
+    transform: [{ translateX: -290 }]
   },
   watermark: {
     width: 580,
     height: 580,
-    opacity: 0.22,
-  },
+    opacity: 0.22
+  }
 });
